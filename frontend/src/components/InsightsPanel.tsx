@@ -26,7 +26,7 @@ export function MethodPanel({ data }: { data: Analysis }) {
   const q = data.result.quality;
   const rows: [string, string][] = [
     ["Region representation", data.region.representation],
-    ["Data source", q.source === "open-meteo" ? "Open-Meteo (fresh download)" : q.source === "cache" ? "MongoDB cache" : q.source === "stale_cache" ? "Stored data (API unavailable)" : "—"],
+    ["Data source", q.source === "open-meteo" ? "Open-Meteo ERA5 (fresh download)" : q.source === "cache" ? "Open-Meteo ERA5 (MongoDB cache)" : q.source === "stale_cache" ? "Stored ERA5 data (API unavailable)" : "—"],
     ["Valid days", `${q.valid_days.toLocaleString()} of ${q.total_days.toLocaleString()} (${q.missing_pct}% missing)`],
     ["Gaps interpolated (≤ 2 days)", String(q.interpolated_days)],
     ["Outliers removed", String(q.outliers_removed)],

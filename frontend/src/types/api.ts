@@ -60,6 +60,15 @@ export interface Trend {
   direction?: "increasing" | "decreasing" | "flat";
 }
 
+export interface MannKendallTrend {
+  available: boolean;
+  n_years: number;
+  reason?: string;
+  tau?: number;
+  p_value?: number;
+  direction?: "increasing" | "decreasing" | "flat";
+}
+
 export interface PctChange {
   valid: boolean;
   pct_change: number | null;
@@ -114,8 +123,9 @@ export interface Summary {
 export interface AnalysisResult {
   summary: Summary;
   annual: AnnualStat[];
-  trend: { event_days: Trend; event_count: Trend };
-  changes: { event_days: PctChange; event_count: PctChange };
+  trend: { event_days?: Trend; event_count: Trend; heatwave_days?: Trend };
+  mann_kendall?: { event_days: MannKendallTrend; event_count: MannKendallTrend };
+  changes: { event_days?: PctChange; event_count: PctChange; heatwave_days?: PctChange };
   quality: Quality;
   insights: Insight[];
 }

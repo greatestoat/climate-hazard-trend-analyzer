@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import calendar
+from itertools import permutations
 from dataclasses import dataclass
 from datetime import date
 
@@ -202,6 +203,41 @@ def linear_trend(x: np.ndarray, y: np.ndarray) -> dict:
     }
 
 
+def mann_kendall_trend(y: np.ndarray) -> dict:
+    """Two-sided Mann-Kendall test with tie correction; no autocorrelation adjustment."""
+    values = np.asarray(y, dtype=float)
+    n = len(values)
+    if n < MIN_TREND_YEARS:
+        return {"available": False, "n_years": n,
+                "reason": f"Needs at least {MIN_TREND_YEARS} complete years (have {n})."}
+    if np.ptp(values) == 0:
+        return {"available": False, "n_years": n, "reason": "No variation across complete years."}
+    s = 0
+    for i in range(n - 1):
+        s += int(np.sign(values[i + 1:] - values[i]).sum())
+    _, tie_counts = np.unique(values, return_counts=True)
+    ties = tie_counts[tie_counts > 1]
+    variance = (n * (n - 1) * (2 * n + 5) - np.sum(ties * (ties - 1) * (2 * ties + 5))) / 18
+    if variance <= 0:
+        return {"available": False, "n_years": n, "reason": "No variation across complete years."}
+    if n <= 8:
+        arrangements = set(permutations(values.tolist()))
+        extreme = sum(
+            abs(sum(int(np.sign(row[j] - row[i])) for i in range(n - 1) for j in range(i + 1, n))) >= abs(s)
+            for row in arrangements
+        )
+        p_value = extreme / len(arrangements)
+    else:
+        z = (s - 1) / np.sqrt(variance) if s > 0 else (s + 1) / np.sqrt(variance) if s < 0 else 0.0
+        p_value = 2 * stats.norm.sf(abs(z))
+    tau = s / (n * (n - 1) / 2)
+    return {
+        "available": True, "n_years": n, "tau": _f(tau, 4),
+        "p_value": _f(p_value, 4),
+        "direction": "increasing" if s > 0 else "decreasing" if s < 0 else "flat",
+    }
+
+
 def pct_change(years: list[int], values: list[float]) -> dict:
     n = len(values)
     if n < MIN_CHANGE_YEARS:
@@ -218,7 +254,7 @@ def pct_change(years: list[int], values: list[float]) -> dict:
     return {**base, "valid": True, "pct_change": _f((l - e) / e * 100, 1), "reason": None}
 
 
-def build_insights(summary, trend, changes, quality, params) -> list[dict]:
+def build_insights(summary, trend, mann_kendall, changes, quality, params) -> list[dict]:
     hazard = params["hazard"]
     label = {"heatwave": "heatwave", "cold_wave": "cold wave", "heavy_rainfall": "heavy-rainfall"}[hazard]
     unit = summary["unit"]
@@ -231,6 +267,14 @@ def build_insights(summary, trend, changes, quality, params) -> list[dict]:
                             f"correlation or multiple comparisons and does not establish causation or the presence or absence of a trend."})
     else:
         out.append({"id": "trend", "severity": "notice", "title": "Trend estimate unavailable", "text": t["reason"]})
+
+    mk = mann_kendall["event_days"]
+    if mk["available"]:
+        out.append({"id": "mann-kendall", "severity": "info", "title": f"Exploratory Mann-Kendall estimate for {label} days",
+                    "text": f"Kendall tau: {mk['tau']:+.3f}; nominal two-sided p = {mk['p_value']:.4f} across {mk['n_years']} complete years. "
+                            f"This estimate does not adjust for serial correlation or multiple comparisons and does not establish the presence or absence of a trend."})
+    else:
+        out.append({"id": "mann-kendall", "severity": "notice", "title": "Mann-Kendall estimate unavailable", "text": mk["reason"]})
 
     c = changes["event_days"]
     if c["valid"]:
@@ -290,6 +334,8 @@ def analyze(clean: CleanResult, start: date, end: date, percentile: float,
     event_days = np.array([r["event_days"] for r in complete], dtype=float)
     event_counts = np.array([r["event_count"] for r in complete], dtype=float)
     trend = {"event_days": linear_trend(years, event_days), "event_count": linear_trend(years, event_counts)}
+    mann_kendall = {"event_days": mann_kendall_trend(event_days),
+                    "event_count": mann_kendall_trend(event_counts)}
     changes = {"event_days": pct_change([int(y) for y in years], event_days.tolist()),
                "event_count": pct_change([int(y) for y in years], event_counts.tolist())}
     if hazard == "heatwave":
@@ -340,8 +386,8 @@ def analyze(clean: CleanResult, start: date, end: date, percentile: float,
                          cumulative_excess_c=event["cumulative_excess"], threshold_c=event["threshold_value"])
     params = {"hazard": hazard, "percentile": percentile, "min_duration": min_duration, "threshold_method": method}
     return {
-        "summary": summary, "annual": annual, "trend": trend, "changes": changes,
+        "summary": summary, "annual": annual, "trend": trend, "mann_kendall": mann_kendall, "changes": changes,
         "quality": clean.quality,
-        "insights": build_insights(summary, trend, changes, clean.quality, params),
+        "insights": build_insights(summary, trend, mann_kendall, changes, clean.quality, params),
         "events": events,
     }
