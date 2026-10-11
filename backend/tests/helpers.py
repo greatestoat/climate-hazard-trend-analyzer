@@ -55,11 +55,17 @@ class FakeRepo:
         return None
 
     async def get_weather(self, key, start, end):
-        return sorted((d, v) for (k, d), v in self.weather.items() if k == key and start <= d <= end)
+        return sorted((v for (k, d), v in self.weather.items() if k == key and start <= d <= end), key=lambda r: r["date"])
 
     async def save_weather(self, key, start, end, rows, quality):
-        for d, v in rows:
-            self.weather[(key, d)] = v
+        for row in rows:
+            if isinstance(row, dict):
+                value = dict(row)
+                d = value["date"]
+            else:
+                d, tmax = row
+                value = {"date": d, "tmax": tmax, "tmin": None, "precipitation_mm": None}
+            self.weather[(key, d)] = value
         self.fetches.append({"region_key": key, "start_date": start, "end_date": end, "quality": quality})
 
     async def find_analysis_by_hash(self, h):

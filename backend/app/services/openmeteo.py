@@ -97,6 +97,36 @@ class OpenMeteoClient:
             raise UpstreamError("Open-Meteo returned fewer locations than requested.")
         return series
 
+    async def fetch_daily_weather(self, points: list[tuple[float, float]], start: date, end: date):
+        """Fetch the daily variables used by the supported hazards for each point."""
+        params = {
+            "latitude": ",".join(f"{p[0]:.4f}" for p in points),
+            "longitude": ",".join(f"{p[1]:.4f}" for p in points),
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "models": "era5",
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+            "timezone": "auto",
+        }
+        data = await self._get_json(self.s.open_meteo_archive_url, params)
+        blocks = data if isinstance(data, list) else [data]
+        metrics = ("temperature_2m_max", "temperature_2m_min", "precipitation_sum")
+        series = []
+        for block in blocks:
+            daily = (block or {}).get("daily") or {}
+            times = daily.get("time")
+            values = {key: daily.get(key) for key in metrics}
+            if times is None or any(v is None or len(v) != len(times) for v in values.values()):
+                raise UpstreamError("Open-Meteo returned an unexpected daily weather format.")
+            series.append((times, {
+                "tmax": values["temperature_2m_max"],
+                "tmin": values["temperature_2m_min"],
+                "precipitation_mm": values["precipitation_sum"],
+            }))
+        if len(series) != len(points):
+            raise UpstreamError("Open-Meteo returned fewer locations than requested.")
+        return series
+
 
 def average_points(series: list[tuple[list, list]]) -> list[tuple[str, float | None]]:
     """Average per-point series into one regional series (positional; ignores missing points)."""
@@ -108,4 +138,18 @@ def average_points(series: list[tuple[list, list]]) -> list[tuple[str, float | N
             if i < len(v) and v[i] is not None:
                 vals.append(float(v[i]))
         rows.append((d, sum(vals) / len(vals) if vals else None))
+    return rows
+
+
+def average_weather_points(series: list[tuple[list, dict[str, list]]]) -> list[dict]:
+    """Average each daily weather metric across region grid points."""
+    times = series[0][0]
+    keys = tuple(series[0][1])
+    rows = []
+    for i, day in enumerate(times):
+        row = {"date": day}
+        for key in keys:
+            values = [float(metrics[key][i]) for _, metrics in series if i < len(metrics[key]) and metrics[key][i] is not None]
+            row[key] = sum(values) / len(values) if values else None
+        rows.append(row)
     return rows

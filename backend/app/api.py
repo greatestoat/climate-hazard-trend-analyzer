@@ -64,7 +64,8 @@ async def get_events(
     page_size: int = Query(default=20, ge=1, le=100),
 ):
     repo = _svc(request).repo
-    if not await repo.get_analysis(analysis_id):
+    analysis = await repo.get_analysis(analysis_id)
+    if not analysis:
         raise NotFoundError("Analysis not found or expired.")
     items, total = await repo.query_events(analysis_id, year, sort, order, (page - 1) * page_size, page_size)
     return {"analysis_id": analysis_id, "total": total, "page": page, "page_size": page_size, "items": items}
@@ -77,14 +78,15 @@ async def export_events_csv(
     year: int | None = Query(default=None, ge=1940, le=2100),
 ):
     repo = _svc(request).repo
-    if not await repo.get_analysis(analysis_id):
+    analysis = await repo.get_analysis(analysis_id)
+    if not analysis:
         raise NotFoundError("Analysis not found or expired.")
 
     async def rows():
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(["start", "end", "year", "duration_days", "peak_temp_c", "peak_date",
-                         "mean_temp_c", "mean_excess_c", "cumulative_excess_c", "threshold_c"])
+        writer.writerow(["start", "end", "year", "duration_days", "extreme_value", "extreme_date",
+                         "mean_value", "mean_excess", "cumulative_excess", "threshold_value"])
         yield output.getvalue()
         offset = 0
         while True:
@@ -95,14 +97,15 @@ async def export_events_csv(
             output.truncate(0)
             for event in events:
                 writer.writerow([event.get(k, "") for k in (
-                    "start", "end", "year", "duration_days", "peak_temp_c", "peak_date",
-                    "mean_temp_c", "mean_excess_c", "cumulative_excess_c", "threshold_c")])
+                    "start", "end", "year", "duration_days", "extreme_value", "extreme_date",
+                    "mean_value", "mean_excess", "cumulative_excess", "threshold_value")])
             yield output.getvalue()
             offset += len(events)
             if offset >= total:
                 break
 
     suffix = f"-{year}" if year else ""
+    hazard = analysis.get("hazard", "hazard")
     return StreamingResponse(rows(), media_type="text/csv; charset=utf-8", headers={
-        "Content-Disposition": f'attachment; filename="heatwave-events-{analysis_id}{suffix}.csv"',
+        "Content-Disposition": f'attachment; filename="{hazard}-events-{analysis_id}{suffix}.csv"',
     })

@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { COLORS } from "../lib/colors";
 import { num } from "../lib/format";
-import type { AnnualStat } from "../types/api";
+import { hazardLabels } from "../lib/hazards";
+import type { AnnualStat, Hazard } from "../types/api";
 
 export function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
@@ -44,9 +45,10 @@ const common = (
   </>
 );
 
-export function FrequencyChart({ annual }: { annual: AnnualStat[] }) {
+export function FrequencyChart({ annual, hazard }: { annual: AnnualStat[]; hazard: Hazard }) {
+  const labels = hazardLabels(hazard);
   return (
-    <ChartCard title="Heatwave frequency" subtitle="Events starting each year, with a 5-year average and fitted trend. Faded bars are incomplete years.">
+    <ChartCard title={`${labels.name} frequency`} subtitle={`Events starting each year, with a 5-year average and fitted trend. Faded bars are incomplete years.`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={annual} margin={margin}>
           {common}
@@ -70,27 +72,29 @@ function YearDot({ cx, cy, payload }: DotProps) {
   return <circle cx={cx} cy={cy} r={3.5} stroke={COLORS.ember} strokeWidth={2} fill={payload.complete ? COLORS.ember : "#fff"} />;
 }
 
-export function HeatDaysChart({ annual }: { annual: AnnualStat[] }) {
+export function HeatDaysChart({ annual, hazard }: { annual: AnnualStat[]; hazard: Hazard }) {
+  const labels = hazardLabels(hazard);
   return (
-    <ChartCard title="Heatwave days per year" subtitle="Total days spent inside heatwaves. Hollow points are incomplete years, excluded from the trend line.">
+    <ChartCard title={`${labels.eventDays} per year`} subtitle={`Total days spent in ${labels.name.toLowerCase()} events. Hollow points are incomplete years, excluded from the trend line.`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={annual} margin={margin}>
           {common}
           <YAxis allowDecimals={false} {...axis} />
-          <Tooltip content={<YearTooltip lines={(a) => [["Heatwave days", String(a.heatwave_days)], ["5-yr average", num(a.rolling_heatwave_days)], ["Trend", num(a.trend_heatwave_days)]]} />} />
+          <Tooltip content={<YearTooltip lines={(a) => [[labels.eventDays, String(a.event_days)], ["5-yr average", num(a.rolling_event_days)], ["Trend", num(a.trend_event_days)]]} />} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Line dataKey="heatwave_days" name="Heatwave days" stroke={COLORS.ember} strokeWidth={1.5} dot={<YearDot />} activeDot={{ r: 5 }} />
-          <Line dataKey="rolling_heatwave_days" name="5-year average" stroke={COLORS.ink} strokeWidth={2} dot={false} />
-          <Line dataKey="trend_heatwave_days" name="Trend" stroke={COLORS.tide} strokeWidth={2} strokeDasharray="6 4" dot={false} />
+          <Line dataKey="event_days" name={labels.eventDays} stroke={COLORS.ember} strokeWidth={1.5} dot={<YearDot />} activeDot={{ r: 5 }} />
+          <Line dataKey="rolling_event_days" name="5-year average" stroke={COLORS.ink} strokeWidth={2} dot={false} />
+          <Line dataKey="trend_event_days" name="Trend" stroke={COLORS.tide} strokeWidth={2} strokeDasharray="6 4" dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </ChartCard>
   );
 }
 
-export function DurationChart({ annual }: { annual: AnnualStat[] }) {
+export function DurationChart({ annual, hazard }: { annual: AnnualStat[]; hazard: Hazard }) {
+  const labels = hazardLabels(hazard);
   return (
-    <ChartCard title="Event duration" subtitle="Mean and longest heatwave beginning each year, in days. Years without events have no bar.">
+    <ChartCard title={`${labels.name} event duration`} subtitle={`Mean and longest event beginning each year, in days. Years without events have no bar.`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={annual} margin={margin}>
           {common}

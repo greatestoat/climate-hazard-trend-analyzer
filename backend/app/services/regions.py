@@ -2,9 +2,9 @@
 
 * City  -> a single point at the geocoded coordinates.
 * Box   -> an N x N grid of cell-centre points (default 3 x 3). Open-Meteo is
-          queried for every point and the daily maximum temperatures are averaged
-          (ignoring missing points) into one regional series. The 95th-percentile
-          threshold is then computed on that area-mean series.
+          queried for every point and each daily weather variable is averaged
+          (ignoring missing points) into one regional series. Hazard thresholds
+          are computed on that area-mean series.
 """
 from app.schemas import BBoxRegion, CityRegion
 

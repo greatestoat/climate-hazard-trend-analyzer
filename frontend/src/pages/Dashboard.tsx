@@ -9,6 +9,7 @@ import { SummaryCards } from "../components/SummaryCards";
 import { useAnalysis } from "../hooks/useAnalysis";
 import { buildRequest, defaultForm, validateForm } from "../lib/request";
 import { regionLabel } from "../lib/format";
+import { hazardLabels } from "../lib/hazards";
 
 export default function Dashboard() {
   const [form, setForm] = useState(defaultForm);
@@ -25,7 +26,7 @@ export default function Dashboard() {
       <main className="min-w-0 space-y-6 p-4 sm:p-8">
         {state.status === "idle" && (
           <EmptyView title="Choose a place and a period">
-            Pick a city or draw a custom box, set the dates, then run the analysis. Results are calculated from Open-Meteo’s historical daily maximum temperatures.
+            Pick a city or draw a custom box, set the dates, then run the analysis. Results use Open-Meteo ERA5 historical daily weather data.
             {errors.length > 0 && <span className="mt-3 block text-ink">Next step: {errors[0]}</span>}
           </EmptyView>
         )}
@@ -42,17 +43,17 @@ export default function Dashboard() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Analysis report</p>
                 <h1 className="mt-1 text-2xl font-bold">{regionLabel(state.data.region)}</h1>
-                <p className="mt-1 text-sm text-muted">{state.data.params.start_date} to {state.data.params.end_date} · Heatwave analysis</p>
+                <p className="mt-1 text-sm text-muted">{state.data.params.start_date} to {state.data.params.end_date} · {hazardLabels(state.data.hazard).name} analysis</p>
               </div>
               <p className="hidden text-xs text-muted print:block">Created {new Date(state.data.created_at).toLocaleString()}</p>
             </section>
             <StripesHero data={state.data} />
-            <SummaryCards result={state.data.result} />
+            <SummaryCards result={state.data.result} hazard={state.data.hazard} />
             <div className="grid gap-6 xl:grid-cols-2">
-              <FrequencyChart annual={state.data.result.annual} />
-              <HeatDaysChart annual={state.data.result.annual} />
+              <FrequencyChart annual={state.data.result.annual} hazard={state.data.hazard} />
+              <HeatDaysChart annual={state.data.result.annual} hazard={state.data.hazard} />
             </div>
-            <DurationChart annual={state.data.result.annual} />
+            <DurationChart annual={state.data.result.annual} hazard={state.data.hazard} />
             <div className="grid gap-6 xl:grid-cols-2">
               <InsightsPanel data={state.data} />
               <MethodPanel data={state.data} />

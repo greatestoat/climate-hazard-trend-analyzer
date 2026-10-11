@@ -4,7 +4,7 @@ from pymongo import ASCENDING, DESCENDING, AsyncMongoClient, UpdateOne
 
 from app.config import Settings
 
-SORT_FIELDS = {"start": "start", "duration": "duration_days", "peak": "peak_temp_c", "intensity": "cumulative_excess_c"}
+SORT_FIELDS = {"start": "start", "duration": "duration_days", "peak": "extreme_value", "intensity": "cumulative_excess"}
 
 
 def utcnow() -> datetime:
@@ -51,15 +51,17 @@ class MongoRepository:
     async def get_weather(self, region_key: str, start: str, end: str) -> list[tuple[str, float]]:
         cur = self.db.weather_daily.find(
             {"region_key": region_key, "date": {"$gte": start, "$lte": end}},
-            {"_id": 0, "date": 1, "tmax": 1}).sort("date", ASCENDING)
-        return [(r["date"], r["tmax"]) async for r in cur]
+            {"_id": 0, "date": 1, "tmax": 1, "tmin": 1, "precipitation_mm": 1}).sort("date", ASCENDING)
+        return [r async for r in cur]
 
-    async def save_weather(self, region_key: str, start: str, end: str, rows: list[tuple[str, float]], quality: dict):
+    async def save_weather(self, region_key: str, start: str, end: str, rows: list[dict], quality: dict):
         now = utcnow()
         for i in range(0, len(rows), 5000):
-            ops = [UpdateOne({"region_key": region_key, "date": d},
-                             {"$set": {"tmax": float(v), "fetched_at": now}}, upsert=True)
-                   for d, v in rows[i:i + 5000]]
+            ops = []
+            for row in rows[i:i + 5000]:
+                values = {k: (float(v) if v is not None else None) for k, v in row.items() if k != "date"}
+                ops.append(UpdateOne({"region_key": region_key, "date": row["date"]},
+                                     {"$set": {**values, "fetched_at": now}}, upsert=True))
             if ops:
                 await self.db.weather_daily.bulk_write(ops, ordered=False)
         await self.db.weather_fetches.insert_one({

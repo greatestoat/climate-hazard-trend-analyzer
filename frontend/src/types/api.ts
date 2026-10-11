@@ -14,12 +14,13 @@ export type RegionInput =
   | { type: "bbox"; name?: string | null; south: number; west: number; north: number; east: number };
 
 export type ThresholdMethod = "period" | "seasonal";
+export type Hazard = "heatwave" | "cold_wave" | "heavy_rainfall";
 
 export interface AnalysisRequest {
   region: RegionInput;
   start_date: string;
   end_date: string;
-  hazard: "heatwave";
+  hazard: Hazard;
   percentile: number;
   min_duration: number;
   threshold_method: ThresholdMethod;
@@ -32,14 +33,18 @@ export interface AnnualStat {
   valid_days: number;
   coverage_pct: number;
   event_count: number;
-  heatwave_days: number;
+  event_days: number;
+  heatwave_days?: number;
   mean_duration_days: number | null;
   max_duration_days: number | null;
-  peak_temp_c: number | null;
-  mean_tmax_c: number | null;
-  rolling_heatwave_days: number | null;
+  peak_temp_c?: number | null;
+  mean_tmax_c?: number | null;
+  rolling_event_days?: number | null;
+  trend_event_days?: number | null;
+  extreme_value?: number | null;
+  rolling_heatwave_days?: number | null;
   rolling_event_count: number | null;
-  trend_heatwave_days: number | null;
+  trend_heatwave_days?: number | null;
   trend_event_count: number | null;
 }
 
@@ -52,7 +57,6 @@ export interface Trend {
   r_squared?: number;
   p_value?: number;
   std_err?: number;
-  significant?: boolean;
   direction?: "increasing" | "decreasing" | "flat";
 }
 
@@ -87,26 +91,31 @@ export interface Quality {
 }
 
 export interface Summary {
-  threshold_c: number;
+  threshold_value: number;
+  unit: "C" | "mm";
   total_events: number;
-  total_heatwave_days: number;
+  total_event_days: number;
+  total_heatwave_days?: number;
   mean_duration_days: number | null;
   longest_event: { start: string; end: string; duration_days: number } | null;
-  peak_temp_c: number | null;
-  peak_date: string | null;
+  extreme_value: number | null;
+  extreme_date: string | null;
+  peak_temp_c?: number | null;
+  peak_date?: string | null;
   mean_events_per_year: number | null;
-  mean_heatwave_days_per_year: number | null;
+  mean_event_days_per_year: number | null;
+  mean_heatwave_days_per_year?: number | null;
   years_in_range: number;
   complete_years: number;
   incomplete_years: number[];
-  most_active_year: { year: number; heatwave_days: number } | null;
+  most_active_year: { year: number; event_days: number } | null;
 }
 
 export interface AnalysisResult {
   summary: Summary;
   annual: AnnualStat[];
-  trend: { heatwave_days: Trend; event_count: Trend };
-  changes: { heatwave_days: PctChange; event_count: PctChange };
+  trend: { event_days: Trend; event_count: Trend };
+  changes: { event_days: PctChange; event_count: PctChange };
   quality: Quality;
   insights: Insight[];
 }
@@ -114,7 +123,7 @@ export interface AnalysisResult {
 export interface Analysis {
   id: string;
   status: "completed";
-  hazard: "heatwave";
+  hazard: Hazard;
   created_at: string;
   region: RegionInput & { key: string; representation: string; sample_points: number };
   params: { start_date: string; end_date: string; percentile: number; min_duration: number; threshold_method: ThresholdMethod };
@@ -129,12 +138,18 @@ export interface HeatwaveEvent {
   end: string;
   year: number;
   duration_days: number;
-  peak_temp_c: number;
-  peak_date: string;
-  mean_temp_c: number;
-  mean_excess_c: number;
-  cumulative_excess_c: number;
-  threshold_c: number;
+  extreme_value: number;
+  extreme_date: string;
+  mean_value: number;
+  mean_excess: number;
+  cumulative_excess: number;
+  threshold_value: number;
+  peak_temp_c?: number;
+  peak_date?: string;
+  mean_temp_c?: number;
+  mean_excess_c?: number;
+  cumulative_excess_c?: number;
+  threshold_c?: number;
 }
 
 export type EventSort = "start" | "duration" | "peak" | "intensity";

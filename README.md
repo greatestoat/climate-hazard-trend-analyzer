@@ -1,7 +1,7 @@
 # Climate Hazard Trend Analyzer
 
-Analyses historical daily maximum temperatures from Open-Meteo's ERA5 reanalysis to detect **heatwaves** for a city or custom
-bounding box and shows how their frequency, duration and intensity have changed. Built for the Dygnify Ventures
+Analyses historical daily weather from Open-Meteo's ERA5 reanalysis to detect **heatwaves, cold waves, and heavy rainfall** for a city or custom
+bounding box and shows how their frequency and duration have changed. Built for the Dygnify Ventures
 Full-Stack Developer assessment.
 
 | Layer | Stack |
@@ -116,8 +116,8 @@ Invoke-RestMethod "http://localhost:8000/api/analyses/$($r.id)/events?sort=durat
 | GET | `/api/cities?q=` | City search (Open-Meteo geocoding), `q` 2-80 chars |
 | POST | `/api/analyses` | Create (or return cached) analysis; 201 |
 | GET | `/api/analyses/{id}` | Retrieve a stored analysis |
-| GET | `/api/analyses/{id}/events` | Heatwave events: `year`, `sort` (start/duration/peak/intensity), `order`, `page`, `page_size` |
-| GET | `/api/analyses/{id}/events.csv` | Download all detected events as CSV; optional `year` filter |
+| GET | `/api/analyses/{id}/events` | Detected events: `year`, `sort` (start/duration/peak/intensity), `order`, `page`, `page_size` |
+| GET | `/api/analyses/{id}/events.csv` | Download detected events as hazard-specific CSV; optional `year` filter |
 
 Request body for `POST /api/analyses`:
 ```json
@@ -135,36 +135,33 @@ Errors share one shape: `{"error": {"code", "message", "details"}}` with 404 not
 
 **Region representation.**
 *City* = one point at the geocoded coordinates. *Custom box* = a 3×3 grid of cell-centre points (configurable via
-`BBOX_GRID_SIZE`); Open-Meteo is queried for all points in one request and daily maxima are averaged (missing points ignored) into a
-single regional series. Boxes must satisfy south < north, west < east (no antimeridian crossing) and span ≤ 10° per side.
+`BBOX_GRID_SIZE`); Open-Meteo is queried for all points in one request and each daily weather variable is averaged (missing points ignored) into a
+single regional series. Boxes must satisfy south < north, west < east (no antimeridian crossing) and span <= 10 degrees per side.
 
-**Heatwave definition.** At least 3 consecutive days with daily max temperature **strictly above** the region's 95th-percentile threshold.
-`threshold_method=period` (default) uses the 95th percentile of all valid days in the selected period. `seasonal` computes a
-percentile per calendar day over a ±7-day window across all years, so winter days are not compared with summer norms.
-A remaining missing day after short-gap interpolation breaks a run.
+**Hazard definitions.** Heatwave is at least 3 consecutive days with daily maximum temperature strictly above the selected upper-tail percentile (default 95). Cold wave is at least 3 consecutive days with daily minimum temperature strictly below the selected lower-tail percentile (default 5; allowed 1-10). Heavy rainfall is a daily precipitation total strictly above the selected percentile (default 95) among days with at least 1 mm precipitation; consecutive qualifying days form an event, with a one-day minimum by default. Rainfall percentiles are restricted to 90-99.9. For all hazards, `threshold_method=period` uses one threshold over the selected period; `seasonal` computes thresholds in a plus/minus 7-day day-of-year window across years. For seasonal rainfall thresholds, windows with fewer than 10 wet-day samples fall back to the period-wide wet-day threshold. A remaining missing day after short-gap interpolation breaks a temperature run. Rainfall is not interpolated across missing days.
 
 **Data handling.**
-* Invalid dates are dropped and counted. Non-numeric temperatures become missing observations and affect coverage; they are not included in the invalid-row count. Duplicate dates are averaged.
-* Physically implausible values (outside -90 to 60 degrees Celsius) and, when at least 1,500 readings are available, spikes beyond 8 robust sigmas of the day-of-year anomaly are removed. This deliberately loose outlier limit aims to retain genuine extreme heat.
+* Invalid dates are dropped and counted. Non-numeric measurements become missing observations and affect coverage; they are not included in the invalid-row count. Duplicate dates are averaged.
+* Temperatures outside -90 to 60 degrees Celsius and negative precipitation totals are removed. For temperature series only, when at least 1,500 readings are available, spikes beyond 8 robust sigmas of the day-of-year anomaly are removed. This deliberately loose outlier limit aims to retain genuine extremes.
 * Missing runs of up to 2 days are linearly interpolated before event detection; longer missing runs remain gaps and break events. Interpolated values count toward annual coverage, and their number is shown in the data-quality panel.
 * A year is **complete** only if the requested date range covers the whole calendar year and at least 90% of its days are valid, including interpolated days. Incomplete years are shown but excluded from trend estimates, rolling means, annual averages, and early-versus-late percentage changes.
 * End dates are clamped to today minus 5 days (archive lag), with a warning in the response.
 * Open-Meteo calls use timeouts and retry with exponential backoff on 429/5xx/timeouts. If the API is unavailable, previously stored data is used with a warning when at least 90% of the requested daily range is stored.
 
-**Statistics.** Annual event counts assign each event to its start year; heatwave days are counted by calendar year. The charts show five-observation rolling means over complete years, with at least 3 observations to display a value. Gaps in complete-year coverage can therefore span more than five calendar years. OLS slopes for heatwave days and event counts are fitted to complete years, requiring at least 5 non-constant observations. Their p-values are nominal and exploratory: the calculation does not adjust for serial correlation, multiple comparisons, or other model assumptions. The app describes estimates as exploratory and does not treat a low p-value as proof of a trend or causation; it cannot establish that no trend exists either. Mann-Kendall testing is not implemented. Early-versus-late percentage change compares the first and last halves of complete years, requiring at least 6 complete years; for an odd count, the middle year is omitted. If the early baseline is zero, percentage change is undefined. These summaries describe the selected region, period, and heatwave definition; they are not a formal attribution study.
+**Statistics.** Annual event counts assign each event to its start year; hazard days are counted by calendar year. The charts show five-observation rolling means over complete years, with at least 3 observations to display a value. Gaps in complete-year coverage can therefore span more than five calendar years. OLS slopes for hazard days and event counts are fitted to complete years, requiring at least 5 non-constant observations. Their p-values are nominal and exploratory: the calculation does not adjust for serial correlation, multiple comparisons, or other model assumptions. The app describes estimates as exploratory and does not treat a low p-value as proof of a trend or causation; it cannot establish that no trend exists either. Mann-Kendall testing is not implemented. Early-versus-late percentage change compares the first and last halves of complete years, requiring at least 6 complete years; for an odd count, the middle year is omitted. If the early baseline is zero, percentage change is undefined. These summaries describe the selected region, period, and hazard definition; they are not a formal attribution study.
 
-**CSV export.** The events panel downloads all detected events, or only the currently selected year, as UTF-8 CSV. The year filter uses each event start year. The file contains event dates, duration, peak and mean temperatures, excess heat measures, and threshold. Annual summaries and raw daily temperatures are not included. The download requires the analysis record to remain available in the database.
+**CSV export.** The events panel downloads all detected events, or only the currently selected year, as UTF-8 CSV. The year filter uses each event start year. The file contains event dates, duration, hazard-specific extreme and mean values, cumulative excess above/below threshold, and threshold. Units are Celsius for temperature hazards and millimetres for rainfall. Annual summaries and raw daily weather values are not included. The download requires the analysis record to remain available in the database.
 
 **Map selection.** In Custom box mode, select two opposite corners on the Leaflet map to fill the coordinate fields. Coordinates remain editable, and the existing 10-degree-per-side validation still applies. Map tiles come from OpenStreetMap and require an internet connection; city selection remains available without opening the map.
 
 **PDF report.** Choose Save report as PDF after an analysis, then select Save as PDF in the browser print dialog. The print layout includes the analysis summary, charts, insights, and data-quality notes; the paginated event table is omitted so the report does not imply it contains the full event list. Printed output depends on the browser chart rendering and print settings.
 
-**Scope and assumptions.** Heatwave is the only implemented hazard; the disabled cold-wave and heavy-rainfall choices are placeholders. Regions are a geocoded city point or a user-defined box; states can be approximated with a box but are not a separate region type. Boxes cannot cross the antimeridian and are limited to 10 degrees per side. The UI accepts percentiles from 90 to 99; the API accepts 90 to 99.9. The UI fixes minimum event duration at 3 days, while the API accepts 3 to 14 days. The default period-wide percentile uses the selected analysis period as its own threshold baseline, so changing that period can change detected events and the trend. Use the seasonal threshold option when a calendar-day comparison is more appropriate.
+**Scope and assumptions.** The app supports heatwave, cold wave, and heavy rainfall. Regions are a geocoded city point or a user-defined box; states can be approximated with a box but are not a separate region type. Boxes cannot cross the antimeridian and are limited to 10 degrees per side. Heat and rainfall percentiles are 90-99.9; cold-wave percentiles are 1-10. Heat and cold events require at least 3 days; rainfall events allow 1-14 days. The default period-wide percentile uses the selected analysis period as its own threshold baseline, so changing that period can change detected events and the trend. Use the seasonal threshold option when a calendar-day comparison is more appropriate. The rainfall rule is a transparent event heuristic and does not account for local impacts, soil saturation, or rainfall return periods.
 
 The application explicitly requests Open-Meteo ERA5 rather than the API's changing Best Match default, supporting a consistent multi-decade input. ERA5 is gridded reanalysis, not a direct station observation; city results represent one grid point and box results average a 3x3 sample of grid points. Grid resolution and regional averaging cannot capture all local variation. The model identifier is part of the weather cache key, so values cached by an older build using Best Match are not reused. See the [Open-Meteo Historical Weather API documentation](https://open-meteo.com/en/docs/historical-weather-api).
 
 **MongoDB.** `weather_daily` (unique index `region_key,date`), `weather_fetches` (cache records, TTL index),
-`analyses` (index on `params_hash`, TTL), `heatwave_events` (indexes on `analysis_id,start` and `analysis_id,year`, TTL).
+`analyses` (index on `params_hash`, TTL), `heatwave_events` (legacy collection name; stores all hazard event types, indexes on `analysis_id,start` and `analysis_id,year`, TTL).
 Identical requests reuse the stored analysis; a different percentile or method on the same region and dates reuses cached weather.
 
 ## 8. Configuration

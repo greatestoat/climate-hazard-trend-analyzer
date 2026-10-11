@@ -44,13 +44,27 @@ class AnalysisRequest(BaseModel):
     region: Region
     start_date: date
     end_date: date
-    hazard: Literal["heatwave"] = "heatwave"
-    percentile: float = Field(default=95.0, ge=90.0, le=99.9)
-    min_duration: int = Field(default=3, ge=3, le=14)
+    hazard: Literal["heatwave", "cold_wave", "heavy_rainfall"] = "heatwave"
+    percentile: float = Field(default=95.0, ge=1.0, le=99.9)
+    min_duration: int | None = Field(default=None, ge=1, le=14)
     threshold_method: Literal["period", "seasonal"] = "period"
 
     @model_validator(mode="after")
     def check_dates(self):
+        if self.hazard == "cold_wave" and "percentile" not in self.model_fields_set:
+            self.percentile = 5.0
+        if self.min_duration is None:
+            self.min_duration = 1 if self.hazard == "heavy_rainfall" else 3
+        if self.hazard == "cold_wave":
+            if not 1 <= self.percentile <= 10:
+                raise ValueError("cold-wave percentile must be between 1 and 10")
+            if self.min_duration < 3:
+                raise ValueError("cold-wave minimum duration must be at least 3 days")
+        else:
+            if not 90 <= self.percentile <= 99.9:
+                raise ValueError("percentile must be between 90 and 99.9")
+            if self.hazard == "heatwave" and self.min_duration < 3:
+                raise ValueError("heatwave minimum duration must be at least 3 days")
         if self.start_date < MIN_DATE:
             raise ValueError(f"start_date must be {MIN_DATE.isoformat()} or later")
         if self.end_date > date.today():

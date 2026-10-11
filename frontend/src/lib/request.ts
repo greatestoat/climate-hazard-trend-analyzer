@@ -1,4 +1,4 @@
-import type { AnalysisRequest, CityResult, ThresholdMethod } from "../types/api";
+import type { AnalysisRequest, CityResult, Hazard, ThresholdMethod } from "../types/api";
 import { isoDate } from "./format";
 
 export interface FormState {
@@ -7,8 +7,9 @@ export interface FormState {
   bbox: { name: string; south: string; west: string; north: string; east: string };
   start: string;
   end: string;
-  hazard: "heatwave";
+  hazard: Hazard;
   percentile: number;
+  minDuration: number;
   method: ThresholdMethod;
 }
 
@@ -25,6 +26,7 @@ export function defaultForm(now = new Date()): FormState {
     end: `${lastYear}-12-31`,
     hazard: "heatwave",
     percentile: 95,
+    minDuration: 3,
     method: "period",
   };
 }
@@ -51,7 +53,10 @@ export function validateForm(f: FormState, now = new Date()): string[] {
     if (days <= 0) errs.push("The start date must be before the end date.");
     else if (days < 3 * 365) errs.push("Choose at least 3 years so a threshold and trend can be estimated.");
   }
-  if (!(f.percentile >= 90 && f.percentile <= 99)) errs.push("Percentile must be between 90 and 99.");
+  if (f.hazard === "cold_wave" ? !(f.percentile >= 1 && f.percentile <= 10) : !(f.percentile >= 90 && f.percentile <= 99)) {
+    errs.push(f.hazard === "cold_wave" ? "Cold-wave percentile must be between 1 and 10." : "Percentile must be between 90 and 99.");
+  }
+  if (f.minDuration < (f.hazard === "heavy_rainfall" ? 1 : 3) || f.minDuration > 14) errs.push("Minimum duration is outside the allowed range.");
   return errs;
 }
 
@@ -66,6 +71,6 @@ export function buildRequest(f: FormState): AnalysisRequest {
         };
   return {
     region, start_date: f.start, end_date: f.end, hazard: f.hazard,
-    percentile: f.percentile, min_duration: 3, threshold_method: f.method,
+    percentile: f.percentile, min_duration: f.minDuration, threshold_method: f.method,
   };
 }

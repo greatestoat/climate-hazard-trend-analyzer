@@ -4,6 +4,7 @@ import { MIN_START } from "../lib/request";
 import { CitySearch } from "./CitySearch";
 import { RegionMap } from "./RegionMap";
 import "leaflet/dist/leaflet.css";
+import type { Hazard } from "../types/api";
 
 interface Props {
   form: FormState;
@@ -27,6 +28,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export function ControlPanel({ form, onChange, onSubmit, loading, errors }: Props) {
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => onChange({ ...form, [k]: v });
   const setBox = (k: keyof FormState["bbox"], v: string) => onChange({ ...form, bbox: { ...form.bbox, [k]: v } });
+  const chooseHazard = (hazard: Hazard) => onChange({
+    ...form,
+    hazard,
+    percentile: hazard === "cold_wave" ? 5 : 95,
+    minDuration: hazard === "heavy_rainfall" ? 1 : 3,
+  });
+  const hazards: { id: Hazard; label: string }[] = [
+    { id: "heatwave", label: "Heatwave" },
+    { id: "cold_wave", label: "Cold wave" },
+    { id: "heavy_rainfall", label: "Heavy rainfall" },
+  ];
   const coords = [form.bbox.south, form.bbox.west, form.bbox.north, form.bbox.east].map(Number);
   const hasBoxCenter = coords.every(Number.isFinite)
     && [form.bbox.south, form.bbox.west, form.bbox.north, form.bbox.east].every((v) => v.trim() !== "")
@@ -74,7 +86,7 @@ export function ControlPanel({ form, onChange, onSubmit, loading, errors }: Prop
                 </Field>
               ))}
             </div>
-            <p className="text-xs text-paper/60">Temperatures are averaged over a 3×3 grid inside the box (max {10}° per side).</p>
+            <p className="text-xs text-paper/60">Daily weather is averaged over a 3×3 grid inside the box (max 10° per side).</p>
           </div>
         )}
       </fieldset>
@@ -89,11 +101,10 @@ export function ControlPanel({ form, onChange, onSubmit, loading, errors }: Prop
 
       <fieldset className="space-y-2">
         <legend className="mb-2 font-display text-sm font-bold">Hazard</legend>
-        {[{ id: "heatwave", label: "Heatwave", on: true }, { id: "cold", label: "Cold wave", on: false }, { id: "rain", label: "Heavy rainfall", on: false }].map((h) => (
-          <label key={h.id} className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${h.on ? "border-amber bg-ink-soft" : "border-white/10 opacity-50"}`}>
-            <input type="radio" name="hazard" checked={h.id === form.hazard} disabled={!h.on} onChange={() => set("hazard", "heatwave")} className="accent-amber" />
+        {hazards.map((h) => (
+          <label key={h.id} className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm transition ${h.id === form.hazard ? "border-amber bg-ink-soft" : "border-white/10 hover:border-white/30"}`}>
+            <input type="radio" name="hazard" checked={h.id === form.hazard} onChange={() => chooseHazard(h.id)} className="accent-amber" />
             <span className="flex-1">{h.label}</span>
-            {!h.on && <span className="text-xs">Not available yet</span>}
           </label>
         ))}
       </fieldset>
@@ -101,8 +112,11 @@ export function ControlPanel({ form, onChange, onSubmit, loading, errors }: Prop
       <details className="group">
         <summary className="cursor-pointer font-display text-sm font-bold">Detection settings</summary>
         <div className="mt-3 space-y-3">
-          <Field label="Threshold percentile">
-            <input type="number" min={90} max={99} step={0.5} className={input} value={form.percentile} onChange={(e) => set("percentile", Number(e.target.value))} />
+          <Field label={form.hazard === "cold_wave" ? "Lower-tail percentile" : form.hazard === "heavy_rainfall" ? "Wet-day rainfall percentile" : "Heat threshold percentile"}>
+            <input type="number" min={form.hazard === "cold_wave" ? 1 : 90} max={form.hazard === "cold_wave" ? 10 : 99} step={0.5} className={input} value={form.percentile} onChange={(e) => set("percentile", Number(e.target.value))} />
+          </Field>
+          <Field label="Minimum event duration (days)">
+            <input type="number" min={form.hazard === "heavy_rainfall" ? 1 : 3} max={14} step={1} className={input} value={form.minDuration} onChange={(e) => set("minDuration", Number(e.target.value))} />
           </Field>
           <Field label="Threshold method">
             <select className={input} value={form.method} onChange={(e) => set("method", e.target.value as FormState["method"])}>
@@ -110,7 +124,11 @@ export function ControlPanel({ form, onChange, onSubmit, loading, errors }: Prop
               <option value="seasonal">Seasonal (per calendar day)</option>
             </select>
           </Field>
-          <p className="text-xs text-paper/60">A heatwave is 3 or more consecutive days above the threshold.</p>
+          <p className="text-xs text-paper/60">
+            {form.hazard === "heatwave" && "Heatwave: daily maximum temperature above the selected upper percentile."}
+            {form.hazard === "cold_wave" && "Cold wave: daily minimum temperature below the selected lower percentile."}
+            {form.hazard === "heavy_rainfall" && "Heavy rainfall: daily total above the selected percentile of wet days (at least 1 mm)."}
+          </p>
         </div>
       </details>
 

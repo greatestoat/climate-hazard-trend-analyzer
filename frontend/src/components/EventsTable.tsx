@@ -2,19 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { API_BASE, fetchEvents } from "../services/api";
 import { num, shortDate } from "../lib/format";
 import type { Analysis, EventSort, EventsPage } from "../types/api";
+import { hazardLabels } from "../lib/hazards";
 import { EmptyView, ErrorView } from "./StateViews";
 
 const PAGE_SIZE = 10;
-const COLUMNS: { key: EventSort | null; label: string; align?: string }[] = [
-  { key: "start", label: "Start" },
-  { key: null, label: "End" },
-  { key: "duration", label: "Days", align: "text-right" },
-  { key: "peak", label: "Peak °C", align: "text-right" },
-  { key: null, label: "Mean °C", align: "text-right" },
-  { key: "intensity", label: "Heat above threshold (°C·days)", align: "text-right" },
-];
-
 export function EventsTable({ analysis }: { analysis: Analysis }) {
+  const labels = hazardLabels(analysis.hazard);
+  const columns: { key: EventSort | null; label: string; align?: string }[] = [
+    { key: "start", label: "Start" }, { key: null, label: "End" },
+    { key: "duration", label: "Days", align: "text-right" },
+    { key: "peak", label: `Extreme (${labels.unit})`, align: "text-right" },
+    { key: null, label: `Mean (${labels.unit})`, align: "text-right" },
+    { key: "intensity", label: `Excess (${labels.unit}·days)`, align: "text-right" },
+  ];
   const [year, setYear] = useState<number | null>(null);
   const [sort, setSort] = useState<EventSort>("start");
   const [order, setOrder] = useState<"asc" | "desc">("asc");
@@ -36,7 +36,10 @@ export function EventsTable({ analysis }: { analysis: Analysis }) {
 
   const toggleSort = (k: EventSort) => {
     if (k === sort) setOrder(order === "asc" ? "desc" : "asc");
-    else { setSort(k); setOrder(k === "start" ? "asc" : "desc"); }
+    else {
+      setSort(k);
+      setOrder(k === "start" || (k === "peak" && analysis.hazard === "cold_wave") ? "asc" : "desc");
+    }
     setPage(1);
   };
 
@@ -48,7 +51,7 @@ export function EventsTable({ analysis }: { analysis: Analysis }) {
     <section aria-labelledby="events-title" className="rounded-lg border border-line bg-surface p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 id="events-title" className="text-xl font-bold">Heatwave events</h2>
+          <h2 id="events-title" className="text-xl font-bold">{labels.events}</h2>
           <p className="text-sm text-muted">{analysis.events_total} detected. Select a column heading to sort.</p>
         </div>
         <label className="text-sm">
@@ -62,7 +65,7 @@ export function EventsTable({ analysis }: { analysis: Analysis }) {
         <a
           href={`${API_BASE}/api/analyses/${analysis.id}/events.csv${year ? `?year=${year}` : ""}`}
           className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-semibold text-ink transition hover:border-ember hover:bg-ember/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ember"
-          aria-label={`Download ${year ? `${year} ` : "all "}heatwave events as CSV`}
+          aria-label={`Download ${year ? `${year} ` : "all "}${labels.name.toLowerCase()} events as CSV`}
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.7">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 2.75v9m0 0 3.25-3.25M10 11.75 6.75 8.5M3.5 12.75v3A1.75 1.75 0 0 0 5.25 17.5h9.5a1.75 1.75 0 0 0 1.75-1.75v-3" />
@@ -74,8 +77,8 @@ export function EventsTable({ analysis }: { analysis: Analysis }) {
       <div className="mt-4">
         {state.status === "error" && <ErrorView error={state.error} onRetry={load} title="Events couldn't be loaded" />}
         {state.status === "ok" && state.data.total === 0 && (
-          <EmptyView compact title="No heatwave events">
-            {year ? `No events began in ${year}. Choose another year or all years.` : "No run of consecutive days exceeded the threshold in this period."}
+          <EmptyView compact title={`No ${labels.name.toLowerCase()} events`}>
+            {year ? `No events began in ${year}. Choose another year or all years.` : "No run of consecutive days met the threshold in this period."}
           </EmptyView>
         )}
         {(state.status === "loading" || (state.status === "ok" && state.data.total > 0)) && (
@@ -83,7 +86,7 @@ export function EventsTable({ analysis }: { analysis: Analysis }) {
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-muted">
-                  {COLUMNS.map((c) => (
+                  {columns.map((c) => (
                     <th key={c.label} scope="col" className={`py-2 pr-3 font-medium ${c.align ?? ""}`}
                       aria-sort={c.key && c.key === sort ? (order === "asc" ? "ascending" : "descending") : undefined}>
                       {c.key ? (
@@ -110,9 +113,9 @@ export function EventsTable({ analysis }: { analysis: Analysis }) {
                             {e.duration_days}
                           </span>
                         </td>
-                        <td className="py-2 pr-3 text-right font-semibold">{num(e.peak_temp_c)}</td>
-                        <td className="py-2 pr-3 text-right">{num(e.mean_temp_c)}</td>
-                        <td className="py-2 text-right">{num(e.cumulative_excess_c)}</td>
+                        <td className="py-2 pr-3 text-right font-semibold">{num(e.extreme_value)}</td>
+                        <td className="py-2 pr-3 text-right">{num(e.mean_value)}</td>
+                        <td className="py-2 text-right">{num(e.cumulative_excess)}</td>
                       </tr>
                     ))}
               </tbody>
