@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0e2a33;
+  --color-ink-soft: #1b3d48;
+  --color-paper: #f2f4f1;
+  --color-surface: #ffffff;
+  --color-line: #d3dcda;
+  --color-mist: #e4ebe9;
+  --color-ember: #c2401c;
+  --color-amber: #e9a23b;
+  --color-tide: #2a7b8c;
+  --color-muted: #5d7279;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+html { background: var(--color-paper); }
+body { font-family: var(--font-sans); color: var(--color-ink); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; }
+
+:focus-visible { outline: 2px solid var(--color-tide); outline-offset: 2px; }
+.rail :focus-visible { outline-color: var(--color-amber); }
+
+.hatch {
+  background-image: repeating-linear-gradient(45deg, #c9d3d1 0 4px, #e4ebe9 4px 8px);
+}
+.scrollbar-hidden { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hidden::-webkit-scrollbar { display: none; }
+.stripe-enter { animation: stripe-in 700ms ease-out both; transform-origin: bottom; }
+@keyframes stripe-in { from { transform: scaleY(0.2); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .stripe-enter { animation: none; } }
+
+@page { size: A4 portrait; margin: 14mm; }
+@media print {
+  html, body, #root { min-height: 0 !important; background: #fff !important; }
+  body { color: #0e2a33; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #root { display: block !important; }
+  .rail, .no-print { display: none !important; }
+  main { display: block !important; padding: 0 !important; }
+  main > * { margin-bottom: 10mm !important; }
+  .print-report-header { display: flex !important; align-items: flex-start; border: 0 !important; border-bottom: 1px solid #d3dcda !important; border-radius: 0 !important; padding: 0 0 6mm !important; }
+  figure, main section { break-inside: avoid; box-shadow: none !important; }
+  figure > div { height: 58mm !important; }
+  h1, h2, h3 { color: #0e2a33 !important; }
+}
