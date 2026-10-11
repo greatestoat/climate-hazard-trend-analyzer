@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db: str = "climate_analyzer"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://climate-hazard-trend-analyzer.vercel.ap"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://climate-hazard-trend-analyzer.vercel.app"
 
     rate_limit_enabled: bool = True
     rate_limit_default: str = "120/minute"
